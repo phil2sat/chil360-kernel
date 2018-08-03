@@ -1,3 +1,5 @@
+UPDATE1: This updated kernel (3.4.110) also has uploading bug/reboot!
+
 NOTE: This is modd of chil360-kernel, made at first for SlimKat-9.x with display-legacy.
 Since display-caf based ROMs (KK/LP) cause kernel panic on wifi upload, all this changes are searching for source of problem.
 Kernel upgrade is not problem, because 3.4.104 experimental (display-caf) also cause kernel panic and reboot.
