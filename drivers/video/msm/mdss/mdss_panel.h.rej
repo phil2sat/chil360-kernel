@@ -1,0 +1,91 @@
+--- drivers/video/msm/mdss/mdss_panel.h.orig	2019-06-08 13:45:24.061712000 +0200
++++ drivers/video/msm/mdss/mdss_panel.h	2019-06-10 15:44:12.295557101 +0200
+@@ -18,12 +18,20 @@
+ #include <linux/types.h>
+ #include <linux/of_device.h>
+ 
++#define KHZ_TO_HZ 1000
++
+ /* panel id type */
+ struct panel_id {
+ 	u16 id;
+ 	u16 type;
+ };
+ 
++enum fps_resolution {
++	FPS_RESOLUTION_DEFAULT,
++	FPS_RESOLUTION_HZ,
++	FPS_RESOLUTION_KHZ,
++};
++
+ #define DEFAULT_FRAME_RATE	60
+ #define MDSS_DSI_RST_SEQ_LEN	10
+ 
+@@ -352,7 +360,7 @@ struct mdss_panel_info {
+ 	u32 min_height;
+ 	u32 min_fps;
+ 	u32 max_fps;
+-
++	u32 prg_fet;
+ 	u32 cont_splash_enabled;
+ 	u32 partial_update_enabled;
+ 	struct ion_handle *splash_ihdl;
+@@ -393,7 +401,7 @@ struct mdss_panel_data {
+ 	 * and teardown.
+ 	 */
+ 	int (*event_handler) (struct mdss_panel_data *pdata, int e, void *arg);
+-
++	bool active;
+ 	struct mdss_panel_data *next;
+ };
+ 
+@@ -401,12 +409,17 @@ struct mdss_panel_data {
+  * mdss_get_panel_framerate() - get panel frame rate based on panel information
+  * @panel_info:	Pointer to panel info containing all panel information
+  */
+-static inline u32 mdss_panel_get_framerate(struct mdss_panel_info *panel_info)
++static inline u32 mdss_panel_get_framerate(struct mdss_panel_info *panel_info,
++										   u32 flags)
+ {
+ 	u32 frame_rate, pixel_total;
++	u64 rate;
+ 
+-	if (panel_info == NULL)
++	if (panel_info == NULL) {
+ 		return DEFAULT_FRAME_RATE;
++		goto end;
++	}
++
+ 
+ 	switch (panel_info->type) {
+ 	case MIPI_VIDEO_PANEL:
+@@ -428,13 +441,25 @@ static inline u32 mdss_panel_get_framera
+ 			  panel_info->lcdc.v_front_porch +
+ 			  panel_info->lcdc.v_pulse_width +
+ 			  panel_info->yres);
+-		if (pixel_total)
+-			frame_rate = panel_info->clk_rate / pixel_total;
+-		else
++		if (pixel_total) {
++			rate = panel_info->clk_rate * KHZ_TO_HZ;
++			do_div(rate, pixel_total);
++			frame_rate = (u32)rate;
++		} else {
+ 			frame_rate = DEFAULT_FRAME_RATE;
+-
++		}
+ 		break;
+ 	}
++
++end:
++	if (flags == FPS_RESOLUTION_KHZ) {
++		if (!(frame_rate / KHZ_TO_HZ))
++			frame_rate *= KHZ_TO_HZ;
++	} else if (flags == FPS_RESOLUTION_HZ) {
++		if (frame_rate / KHZ_TO_HZ)
++			frame_rate /= KHZ_TO_HZ;
++	}
++
+ 	return frame_rate;
+ }
+ 
