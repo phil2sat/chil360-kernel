@@ -1,4 +1,6 @@
-UPDATE1: This updated kernel (3.4.110) also has uploading bug/reboot!
+UPDATE1: This Kernel is for PostmarketOS not for Android anymore!!!
+
+UPDATE OLD: This updated kernel (3.4.110) also has uploading bug/reboot!
 
 NOTE: This is modd of chil360-kernel, made at first for SlimKat-9.x with display-legacy.
 Since display-caf based ROMs (KK/LP) cause kernel panic on wifi upload, all this changes are searching for source of problem.
