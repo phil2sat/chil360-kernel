@@ -22,7 +22,7 @@ ccflags-y += -I$(SELF_DIR)/../ar6000
 ccflags-y += -include $(SELF_DIR)/../include/linux/ieee80211.h
 ccflags-y += -include $(SELF_DIR)/../include/linux/nl80211.h
 ccflags-y += -include $(SELF_DIR)/../include/net/cfg80211.h
-ccflags-y += -include $(SELF_DIR)/../include/linux/compat-3.4.h
+ccflags-y += -include $(SELF_DIR)/../include/linux/compat-2.6.h
 
 ldflags-y += --strip-debug
 
