@@ -17,7 +17,7 @@
 #include "core.h"
 #include "debug.h"
 #include <linux/vmalloc.h>
-#define MAC_FILE AR6003_MAC_FILE
+#define MAC_FILE "softmac"
 
 typedef char            A_CHAR;
 extern int android_readwrite_file(const A_CHAR *filename, A_CHAR *rbuf, const A_CHAR *wbuf, size_t length);
