@@ -335,7 +335,7 @@ static int ath6kl_sdio_alloc_prep_scat_req(struct ath6kl_sdio *ar_sdio,
 	int i, scat_req_sz, scat_list_sz, sg_sz = 0, buf_sz;
 	u8 *virt_buf;
 
-	scat_list_sz = (n_scat_entry - 1) * sizeof(struct hif_scatter_item);
+	scat_list_sz = n_scat_entry * sizeof(struct hif_scatter_item);
 	scat_req_sz = sizeof(*s_req) + scat_list_sz;
 
 	if (!virt_scat)
@@ -840,6 +840,8 @@ static int ath6kl_sdio_suspend(struct ath6kl *ar, struct cfg80211_wowlan *wow)
 	mmc_pm_flag_t flags;
 	bool try_deepsleep = false;
 	int ret;
+	struct ath6kl_vif *vif;
+	int no_if_up;
 
 	if (ar->suspend_mode == WLAN_POWER_STATE_WOW ||
 	    (!ar->suspend_mode && wow)) {
@@ -848,7 +850,19 @@ static int ath6kl_sdio_suspend(struct ath6kl *ar, struct cfg80211_wowlan *wow)
 		if (ret)
 			goto cut_pwr;
 
-		ret = ath6kl_cfg80211_suspend(ar, ATH6KL_CFG_SUSPEND_WOW, wow);
+		// check to see if any interfaces are up
+		// if not, then we can skip WOW
+		no_if_up = 1;
+		spin_lock_bh(&ar->list_lock);
+		list_for_each_entry(vif, &ar->vif_list, list)
+			if (vif->ndev->flags & IFF_UP) no_if_up = 0;
+		spin_unlock_bh(&ar->list_lock);
+
+		if (no_if_up) {
+			ret = -ENOTCONN;
+		} else {
+			ret = ath6kl_cfg80211_suspend(ar, ATH6KL_CFG_SUSPEND_WOW, wow);
+		}
 		if (ret && ret != -ENOTCONN)
 			ath6kl_err("wow suspend failed: %d\n", ret);
 

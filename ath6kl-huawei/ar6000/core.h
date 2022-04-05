@@ -194,7 +194,7 @@ enum ath6kl_hw_flags {
 
 /* AR6003 3.0 definitions */
 #define AR6003_HW_2_1_1_VERSION                 0x30000582
-#define AR6003_HW_2_1_1_FW_DIR			"ath6k"
+#define AR6003_HW_2_1_1_FW_DIR			AR6003_HW_FW_DIR
 #define AR6003_HW_2_1_1_OTP_FILE		"otp.bin"
 #define AR6003_HW_2_1_1_FIRMWARE_FILE		"athwlan.bin"
 #define AR6003_HW_2_1_1_TCMD_FIRMWARE_FILE	"athtcmd_ram.bin"
@@ -202,9 +202,9 @@ enum ath6kl_hw_flags {
 #define AR6003_HW_2_1_1_TESTSCRIPT_FILE	"nullTestFlow.bin"
 #define AR6003_HW_2_1_1_PATCH_FILE		"data.patch.bin"
 /* relation to system/core/init/devices.c. FIRMWARE_DIR4 (/data/misc/wifi) */
-#define AR6003_HW_2_1_1_BOARD_DATA_FILE "load/caldata.bin"
+#define AR6003_HW_2_1_1_BOARD_DATA_FILE         AR6003_HW_BOARD_DATA_FILE
 #define AR6003_HW_2_1_1_DEFAULT_BOARD_DATA_FILE	\
-			"ath6k/bdata.SD31.bin"
+			AR6003_HW_DEFAULT_BOARD_DATA_FILE
 
 /* AR6004 1.0 definitions */
 #define AR6004_HW_1_0_VERSION                 0x30000623
@@ -899,7 +899,8 @@ void init_netdev(struct net_device *dev);
 void ath6kl_cookie_init(struct ath6kl *ar);
 void ath6kl_cookie_cleanup(struct ath6kl *ar);
 void ath6kl_rx(struct htc_target *target, struct htc_packet *packet);
-void ath6kl_tx_complete(void *context, struct list_head *packet_queue);
+void ath6kl_tx_complete(struct htc_target *context,
+			struct list_head *packet_queue);
 enum htc_send_full_action ath6kl_tx_queue_full(struct htc_target *target,
 					       struct htc_packet *packet);
 void ath6kl_stop_txrx(struct ath6kl *ar);

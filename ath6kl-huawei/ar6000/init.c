@@ -33,7 +33,11 @@
 	ATH6KL_DBG_TRC + ATH6KL_DBG_BOOT + ATH6KL_DBG_SUSPEND + ATH6KL_DBG_WLAN_CFG. (defined in debug.h)
 */
 unsigned int debug_mask = 0x142800;
+
+#ifdef WIFI_POWER_TUNED
 unsigned int needPowerTuned = 1;
+#endif
+
 static unsigned int testmode;
 /* Set WOW mode as default suspend mode */
 static unsigned int suspend_mode = 3;
@@ -48,7 +52,11 @@ module_param(testmode, uint, 0644);
 module_param(suspend_mode, uint, 0644);
 module_param(wow_mode, uint, 0644);
 module_param(uart_debug, uint, 0644);
+
+#ifdef WIFI_POWER_TUNED
 module_param(needPowerTuned, uint, 0644);
+#endif
+
 module_param(ar6k_clock, uint, 0644);
 module_param(locally_administered_bit, ushort, 0644);
 module_param(heart_beat_poll, uint, 0644);
@@ -181,8 +189,8 @@ struct sk_buff *ath6kl_buf_alloc(int size)
 	u16 reserved;
 
 	/* Add chacheline space at front and back of buffer */
-	reserved = (2 * L1_CACHE_BYTES) + ATH6KL_DATA_OFFSET +
-		   sizeof(struct htc_packet) + ATH6KL_HTC_ALIGN_BYTES;
+	reserved = roundup((2 * L1_CACHE_BYTES) + ATH6KL_DATA_OFFSET +
+		   sizeof(struct htc_packet) + ATH6KL_HTC_ALIGN_BYTES, 4);
 	skb = dev_alloc_skb(size + reserved);
 
 	if (skb)
@@ -1171,6 +1179,8 @@ out:
 
 	return 0;
 }
+
+#ifdef WIFI_POWER_TUNED
 static
 void calculate_ext_crc(u32 TargetType, unsigned char *eeprom_data, size_t eeprom_size)
 {
@@ -1198,7 +1208,7 @@ void calculate_ext_crc(u32 TargetType, unsigned char *eeprom_data, size_t eeprom
 
 }
 
-#define AR6003_REV2_BOARD_POWER_PA_FILE			"../../data/misc/wifi/Cal_powerTuned_pa.bin"
+//#define AR6003_REV2_BOARD_POWER_PA_FILE			"../../data/misc/wifi/Cal_powerTuned_pa.bin"
 /* switch for self init feature */ 
 #ifndef AR6005_SELF_INIT_SUPPORT
 #define AR6005_SELF_INIT_SUPPORT
@@ -1333,6 +1343,8 @@ ar6000_cal_powerTuned(struct ath6kl *ar, unsigned char *eeprom_data, size_t eepr
 
 }
 #endif  // AR6005_SELF_INIT_SUPPORT
+#endif  // WIFI_POWER_TUNED
+
 static int ath6kl_upload_board_file(struct ath6kl *ar)
 {
 	u32 board_address, board_ext_address, param;
@@ -1388,6 +1400,7 @@ static int ath6kl_upload_board_file(struct ath6kl *ar)
 		return -EINVAL;
 		break;
 	}
+#ifdef WIFI_POWER_TUNED	
 	ath6kl_dbg(ATH6KL_DBG_BOOT,"(ar)-> target_type =%d, ar->fw_board_len =%d, needPowerTuned=%d.\n",(ar)->target_type, ar->fw_board_len , needPowerTuned);
        if (ar->fw_board) {
           if((ar->target_type == TARGET_TYPE_AR6003) && (ar->fw_board_len == (AR6003_BOARD_DATA_SZ + AR6003_BOARD_EXT_DATA_SZ_V2))&&needPowerTuned) {
@@ -1396,7 +1409,7 @@ static int ath6kl_upload_board_file(struct ath6kl *ar)
               ath6kl_err("we will not tune power due to targetType=0x%x,datasize=%d\n",ar->target_type,board_ext_data_size);
          }
        }
-
+#endif
 	if (board_ext_address &&
 	    ar->fw_board_len == (board_data_size + board_ext_data_size)) {
 
@@ -1828,11 +1841,13 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 	 * size.
 	 */
 	if (ath6kl_htc_wait_target(ar->htc_target)) {
+		ath6kl_err("htc wait target failed: %d\n", ret);
 		ret = -EIO;
 		goto err_power_off;
 	}
 
 	if (ath6kl_init_service_ep(ar)) {
+		ath6kl_err("Endpoint service initilisation failed: %d\n", ret);
 		ret = -EIO;
 		goto err_cleanup_scatter;
 	}
@@ -2024,7 +2039,7 @@ int ath6kl_core_init(struct ath6kl *ar)
 	rtnl_lock();
 
 	/* Add an initial station interface */
-	ndev = ath6kl_interface_add(ar, "eth%d", NL80211_IFTYPE_STATION, 0,
+	ndev = ath6kl_interface_add(ar, WIFI_DRIVER_IFACE_NAME "%d", NL80211_IFTYPE_STATION, 0,
 				    INFRA_NETWORK);
 
 	rtnl_unlock();

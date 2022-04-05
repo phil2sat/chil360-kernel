@@ -438,7 +438,7 @@ static void htc_tx_complete(struct htc_endpoint *endpoint,
 		   "htc tx complete ep %d pkts %d\n",
 		   endpoint->eid, get_queue_depth(txq));
 
-	ath6kl_tx_complete(endpoint->target->dev->ar, txq);
+	ath6kl_tx_complete(endpoint->target, txq);
 }
 
 static void htc_tx_comp_handler(struct htc_target *target,
@@ -755,7 +755,7 @@ static void ath6kl_htc_tx_bundle(struct htc_endpoint *endpoint,
 	u32 txb_mask;
 	u8 ac = WMM_NUM_AC;
 
-	if ((HTC_CTRL_RSVD_SVC != endpoint->svc_id) ||
+	if ((HTC_CTRL_RSVD_SVC != endpoint->svc_id) &&
 		(WMI_CONTROL_SVC != endpoint->svc_id))
 		ac = target->dev->ar->ep2ac_map[endpoint->eid];
 
@@ -846,6 +846,7 @@ static void ath6kl_htc_tx_from_queue(struct htc_target *target,
 	int bundle_sent;
 	int n_pkts_bundle;
 	u8 ac = WMM_NUM_AC;
+	int status;
 
 	spin_lock_bh(&target->tx_lock);
 
@@ -863,7 +864,7 @@ static void ath6kl_htc_tx_from_queue(struct htc_target *target,
 	 */
 	INIT_LIST_HEAD(&txq);
 
-	if ((HTC_CTRL_RSVD_SVC != endpoint->svc_id) ||
+	if ((HTC_CTRL_RSVD_SVC != endpoint->svc_id) &&
 		(WMI_CONTROL_SVC != endpoint->svc_id))
 		ac = target->dev->ar->ep2ac_map[endpoint->eid];
 
@@ -907,7 +908,12 @@ static void ath6kl_htc_tx_from_queue(struct htc_target *target,
 
 			ath6kl_htc_tx_prep_pkt(packet, packet->info.tx.flags,
 					       0, packet->info.tx.seqno);
-			ath6kl_htc_tx_issue(target, packet);
+			status = ath6kl_htc_tx_issue(target, packet);
+
+			if (packet->completion && status) {
+				packet->status = status;
+				packet->completion(packet->context, packet);
+			}
 		}
 
 		spin_lock_bh(&target->tx_lock);
@@ -1881,13 +1887,50 @@ fail_rx:
 	return status;
 }
 
+static void ath6kl_htc_rx_work(struct work_struct *work)
+{
+	struct htc_target *target;
+	struct htc_packet *packet, *tmp_pkt;
+	struct htc_endpoint *endpoint;
+
+	target = container_of(work, struct htc_target, rx_work);
+
+	spin_lock_bh(&target->rx_comp_lock);
+	list_for_each_entry_safe(packet, tmp_pkt, &target->rx_bufq, list) {
+		list_del(&packet->list);
+
+		spin_unlock_bh(&target->rx_comp_lock);
+		endpoint = &target->endpoint[packet->endpoint];
+
+		ath6kl_dbg(ATH6KL_DBG_HTC,
+			   "htc rx complete ep %d packet 0x%p\n",
+			   endpoint->eid, packet);
+
+		endpoint->ep_cb.rx(endpoint->target, packet);
+		spin_lock_bh(&target->rx_comp_lock);
+	}
+	spin_unlock_bh(&target->rx_comp_lock);
+}
+
 static void ath6kl_htc_rx_complete(struct htc_endpoint *endpoint,
 				   struct htc_packet *packet)
 {
+	struct htc_target *target;
+
+	if (endpoint->eid == ENDPOINT_0) {
 		ath6kl_dbg(ATH6KL_DBG_HTC,
 			   "htc rx complete ep %d packet 0x%p\n",
 			   endpoint->eid, packet);
 		endpoint->ep_cb.rx(endpoint->target, packet);
+	} else {
+		target = endpoint->target;
+
+		spin_lock_bh(&target->rx_comp_lock);
+		list_add_tail(&packet->list, &target->rx_bufq);
+		spin_unlock_bh(&target->rx_comp_lock);
+
+		queue_work(target->rx_wq, &target->rx_work);
+	}
 }
 
 static int ath6kl_htc_rx_bundle(struct htc_target *target,
@@ -2843,13 +2886,24 @@ void *ath6kl_htc_create(struct ath6kl *ar)
 		goto err_htc_cleanup;
 	}
 
+	target->rx_wq = create_singlethread_workqueue("htc_rx");
+	if (!target->rx_wq) {
+		ath6kl_err("unable to create rx_wq workqueue\n");
+		status = -ENOMEM;
+		goto err_htc_cleanup;
+	}
+
 	spin_lock_init(&target->htc_lock);
 	spin_lock_init(&target->rx_lock);
 	spin_lock_init(&target->tx_lock);
+	spin_lock_init(&target->rx_comp_lock);
 
 	INIT_LIST_HEAD(&target->free_ctrl_txbuf);
 	INIT_LIST_HEAD(&target->free_ctrl_rxbuf);
 	INIT_LIST_HEAD(&target->cred_dist_list);
+	INIT_LIST_HEAD(&target->rx_bufq);
+
+	INIT_WORK(&target->rx_work, ath6kl_htc_rx_work);
 
 	target->dev->ar = ar;
 	target->dev->htc_cnxt = target;
@@ -2875,6 +2929,8 @@ err_htc_cleanup:
 void ath6kl_htc_cleanup(struct htc_target *target)
 {
 	struct htc_packet *packet, *tmp_packet;
+
+	destroy_workqueue(target->rx_wq);
 
 	/* FIXME: remove check once USB support is implemented */
 	if (target->dev->ar->hif_type != ATH6KL_HIF_TYPE_USB)

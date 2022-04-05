@@ -600,7 +600,7 @@ enum htc_send_full_action ath6kl_tx_queue_full(struct htc_target *target,
 		 */
 		set_bit(WMI_CTRL_EP_FULL, &ar->flag);
 		ath6kl_err("wmi ctrl ep is full\n");
-		/* TODO: Handle FW error recovery here for ctrl ep full cases */
+		ath6kl_recovery_err_notify(ar, ATH6KL_FW_EP_FULL);
 		return action;
 	}
 
@@ -677,9 +677,10 @@ static void ath6kl_tx_clear_node_map(struct ath6kl_vif *vif,
 	}
 }
 
-void ath6kl_tx_complete(void *context, struct list_head *packet_queue)
+void ath6kl_tx_complete(struct htc_target *target,
+			struct list_head *packet_queue)
 {
-	struct ath6kl *ar = context;
+	struct ath6kl *ar = target->dev->ar;
 	struct sk_buff_head skb_queue;
 	struct htc_packet *packet;
 	struct sk_buff *skb;
@@ -1055,6 +1056,7 @@ static void aggr_deque_frms(struct aggr_info_conn *agg_conn, u8 tid,
 	rxtid = &agg_conn->rx_tid[tid];
 	stats = &agg_conn->stat[tid];
 
+	spin_lock_bh(&rxtid->lock);
 	idx = AGGR_WIN_IDX(rxtid->seq_next, rxtid->hold_q_sz);
 
 	/*
@@ -1072,8 +1074,6 @@ static void aggr_deque_frms(struct aggr_info_conn *agg_conn, u8 tid,
 	 */
 	seq_end = seq_no ? seq_no : rxtid->seq_next;
 	idx_end = AGGR_WIN_IDX(seq_end, rxtid->hold_q_sz);
-
-	spin_lock_bh(&rxtid->lock);
 
 	do {
 		node = &rxtid->hold_q[idx];
@@ -1208,8 +1208,8 @@ static bool aggr_process_recv_frm(struct aggr_info_conn *agg_conn, u8 tid,
 	if (agg_conn->timer_scheduled)
 		return is_queued;
 
+	spin_lock_bh(&rxtid->lock);
 	for (idx = 0 ; idx < rxtid->hold_q_sz; idx++) {
-		spin_lock_bh(&rxtid->lock);
 		if (rxtid->hold_q[idx].skb) {
 			/*
 			 * There is a frame in the queue and no
@@ -1223,11 +1223,10 @@ static bool aggr_process_recv_frm(struct aggr_info_conn *agg_conn, u8 tid,
 					 HZ * (AGGR_RX_TIMEOUT) / 1000));
 			rxtid->progress = false;
 			rxtid->timer_mon = true;
-			spin_unlock_bh(&rxtid->lock);
 			break;
 		}
-		spin_unlock_bh(&rxtid->lock);
 	}
+	spin_unlock_bh(&rxtid->lock);
 
 	return is_queued;
 }
@@ -1647,17 +1646,16 @@ static void aggr_timeout(unsigned long arg)
 		rxtid = &aggr_conn->rx_tid[i];
 
 		if (rxtid->aggr && rxtid->hold_q) {
+			spin_lock_bh(&rxtid->lock);
 			for (j = 0; j < rxtid->hold_q_sz; j++) {
-				spin_lock_bh(&rxtid->lock);
 				if (rxtid->hold_q[j].skb) {
 					aggr_conn->timer_scheduled = true;
 					rxtid->timer_mon = true;
 					rxtid->progress = false;
-					spin_unlock_bh(&rxtid->lock);
 					break;
 				}
-				spin_unlock_bh(&rxtid->lock);
 			}
+			spin_unlock_bh(&rxtid->lock);
 
 			if (j >= rxtid->hold_q_sz)
 				rxtid->timer_mon = false;

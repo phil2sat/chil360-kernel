@@ -17,7 +17,7 @@
 #include "core.h"
 #include "debug.h"
 #include <linux/vmalloc.h>
-#define MAC_FILE "softmac"
+#define MAC_FILE AR6003_MAC_FILE
 
 typedef char            A_CHAR;
 extern int android_readwrite_file(const A_CHAR *filename, A_CHAR *rbuf, const A_CHAR *wbuf, size_t length);
@@ -61,6 +61,8 @@ static void ath6kl_calculate_crc(u32 target_type, u8 *data, size_t len)
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT, "New Checksum: %u\n", checksum);
 }
+
+#ifndef WIFI_MAC_FROM_NV
 
 #ifdef CONFIG_MACH_PX
 static int ath6kl_fetch_nvmac_info(struct ath6kl *ar)
@@ -132,14 +134,24 @@ static int ath6kl_fetch_mac_file(struct ath6kl *ar)
 
 	return ret;
 }
-#endif
+#endif /* CONFIG_MACH_PX */
+
+#else
+
+extern int read_nv(unsigned int nv_item, void *buf);
+
+#endif /* WIFI_MAC_FROM_NV */
 
 void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit)
 {
 	u8 *ptr_mac;
-	int i, ret;
+	int i = 0;
+	int ret;
 #if defined(CONFIG_MACH_PX) || defined(FIX_HUAWEI_BUTCHERING)
 	unsigned int softmac[6];
+#endif
+#ifdef WIFI_MAC_FROM_NV
+	u8 nvdata[24];
 #endif
 
 	switch (ar->target_type) {
@@ -161,6 +173,18 @@ void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit)
 	printk("MAC from EEPROM %02X:%02X:%02X:%02X:%02X:%02X\n",
 		   ptr_mac[0], ptr_mac[1], ptr_mac[2],
 		   ptr_mac[3], ptr_mac[4], ptr_mac[5]);
+
+#ifdef WIFI_MAC_FROM_NV
+	nvdata[0] = (u8)i;
+	ret = read_nv(4678, nvdata);
+	if (ret == 0) {
+		memcpy(ptr_mac, nvdata, ETH_ALEN);
+		printk("MAC from NV     %02X:%02X:%02X:%02X:%02X:%02X\n",
+			   ptr_mac[0], ptr_mac[1], ptr_mac[2],
+			   ptr_mac[3], ptr_mac[4], ptr_mac[5]);
+	}
+
+#else
 
 #if defined(CONFIG_MACH_PX) || defined(FIX_HUAWEI_BUTCHERING)
 #ifdef FIX_HUAWEI_BUTCHERING
@@ -210,7 +234,9 @@ void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit)
 	}
 
 	kfree(ath6kl_softmac);
-#endif
+#endif /* CONFIG_MACH_PX */
+
+#endif /* WIFI_MAC_FROM_NV */
 
 	if (locally_administered_bit)
 		ptr_mac[0] |= 0x02;
