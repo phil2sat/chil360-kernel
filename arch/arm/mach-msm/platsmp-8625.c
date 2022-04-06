@@ -149,7 +149,7 @@ static int  __cpuinit msm8625_release_secondary(void)
 		return -ENODEV;
 	}
 
-	base_ptr = ioremap_nocache(MSM_CORE1_RESET, SZ_4);
+	base_ptr = ioremap_nocache(MSM_CORE1_RESET, SZ_4K);
 	if (!base_ptr)
 		return -ENODEV;
 	/* Reset core 1 out of reset */
