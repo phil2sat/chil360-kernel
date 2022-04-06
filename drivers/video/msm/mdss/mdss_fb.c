@@ -42,6 +42,7 @@
 #include <linux/vmalloc.h>
 
 #include <mach/board.h>
+#include "../../console/fbcon.h"
 
 #include "mdss_fb.h"
 #include "mdss_mdp.h"
@@ -1127,6 +1128,13 @@ static int mdss_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	void __user *argp = (void __user *)arg;
 	struct mdp_page_protection fb_page_protection;
 	int ret = -ENOSYS;
+	
+	if ( cmd != MSMFB_NOTIFY_UPDATE 
+	  && cmd != MSMFB_OVERLAY_VSYNC_CTRL
+	  && cmd != MSMFB_METADATA_GET
+	  && cmd != MSMFB_DISPLAY_COMMIT ) {
+		fb_console_exit(); }
+
 
 	switch (cmd) {
 	case MSMFB_CURSOR:
