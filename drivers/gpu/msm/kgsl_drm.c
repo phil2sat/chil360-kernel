@@ -142,8 +142,7 @@ kgsl_gem_alloc_memory(struct drm_gem_object *obj)
 #else
 		mmu = &kgsl_get_device(KGSL_DEVICE_3D0)->mmu;
 #endif
-		priv->pagetable = kgsl_mmu_getpagetable(mmu,
-					KGSL_MMU_GLOBAL_PT);
+		priv->pagetable = kgsl_mmu_getpagetable(KGSL_MMU_GLOBAL_PT);
 		if (priv->pagetable == NULL) {
 			DRM_ERROR("Unable to get the GPU MMU pagetable\n");
 			return -EINVAL;
