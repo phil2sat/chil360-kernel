@@ -147,7 +147,7 @@ int __devinit msm_pm_boot_init(struct msm_pm_boot_platform_data *pdata)
 			if (!pdata->p_addr || !pdata->v_addr)
 				return -ENODEV;
 
-			remapped = ioremap_nocache(pdata->p_addr, SZ_8);
+			remapped = ioremap_nocache(pdata->p_addr, SZ_8K);
 			ret = msm_pm_boot_reset_vector_init(remapped);
 
 			__raw_writel((pdata->p_addr | BOOT_REMAP_ENABLE),
