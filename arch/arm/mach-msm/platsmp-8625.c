@@ -279,7 +279,7 @@ void __init platform_smp_prepare_cpus(unsigned int max_cpus)
 	__raw_writel(MSM8625_SECONDARY_PHYS, (MSM_CFG_CTL_BASE + 0x34));
 	mb();
 
-	second_ptr = ioremap_nocache(MSM8625_SECONDARY_PHYS, SZ_8);
+	second_ptr = ioremap_nocache(MSM8625_SECONDARY_PHYS, SZ_8K);
 	if (!second_ptr) {
 		pr_err("failed to ioremap for secondary core\n");
 		return;
